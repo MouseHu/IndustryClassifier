@@ -1,9 +1,9 @@
+from __future__ import print_function # Use a function definition from future version (say 3.x from 2.7 interpreter)
 import pandas as pd
-# Import the relevant libraries
 import math
 import numpy as np
 import os
-from __future__ import print_function # Use a function definition from future version (say 3.x from 2.7 interpreter)
+
 
 import cntk as C
 import cntk.tests.test_utils
@@ -19,7 +19,8 @@ from cntk.device import try_set_default_device, gpu,cpu
 try_set_default_device(gpu(0))
 
 # number of words in vocab, slot labels, and intent labels
-vocab_size = 80000; num_labels = 19
+vocab_size = 80000
+num_labels = 19
 title_size = 52000
 body_size = 210000
 # model dimensions
@@ -27,14 +28,13 @@ input_dim  = vocab_size
 label_dim  = num_labels
 emb_dim    = 300
 hidden_dim = 200
-max_length = 50
+max_length_title = 50
+max_length_body = 200
 model = 'cnn'
-embed_file = None
-industry=[i.rstrip("\n") for i in open("news/industry.wl").readlines()]
 
-if embed_file:
-    with open(embedfile,'rb') as handle:
-        embedding=pickle.load(handle)
+
+
+
     
 # Create the containers for input feature (x) and the label (y)
 i1_axis = C.Axis.new_unique_dynamic_axis('1')
@@ -59,13 +59,14 @@ def create_model():
         'gru':create_model_gru(),
         'lstm':create_model_lstm(),
         'cnn_body':create_model_cnn_body(),
-        'cnn_2fold':create_model_cnn_2fold()
+        'cnn_2fold':create_model_cnn_2fold(),
+        'cnn_embed':create_model_cnn(embed=True)
     }[model]
 def create_model_gru(embed=False):
     with C.layers.default_options(initial_state=0.1):
         if embed:
             h1= C.layers.Sequential([
-            C.layers.Embedding(emb_dim,name='embed',init=embedding),
+            C.layers.Embedding(emb_dim,name='embed',init=embedding_title),
             C.layers.BatchNormalization(),
             C.layers.Stabilizer()])
         else:
@@ -82,7 +83,7 @@ def create_model_lstm(embed = False):
     with C.layers.default_options(initial_state=0.1):
         if embed:
             h1= C.layers.Sequential([
-            C.layers.Embedding(emb_dim,name='embed',init=embedding),
+            C.layers.Embedding(emb_dim,name='embed',init=embedding_title),
             C.layers.BatchNormalization(),
             C.layers.Stabilizer()])
         else:
@@ -99,12 +100,12 @@ def create_model_cnn_2fold():
     with C.layers.default_options(initial_state=0.1):
 
 
-        #h1_1= C.layers.Embedding(weights=embedding,name='embed')(x)#
-        h1_1= C.layers.Embedding(300,name='embed')(x)
+        h1_1= C.layers.Embedding(weights=embedding_title,name='embed')(x)#
+        #h1_1= C.layers.Embedding(300,name='embed')(x)
         h1_2= C.layers.Embedding(300,name='embed')(x)#init=embedding,
         h1 = C.splice(h1_1,h1_2,axis = 0)
         #bn = C.layers.BatchNormalization(name='bn')(h1)
-        to_static= C.layers.PastValueWindow(window_size=max_length, axis=-2)(h1)[0]
+        to_static= C.layers.PastValueWindow(window_size=max_length_title, axis=-2)(h1)[0]
 
         #value,valid = to_static(h1)
 
@@ -131,12 +132,12 @@ def create_model_cnn(embed = False):
 
        
         if embed:
-            h1= C.layers.Embedding(300,init=embedding,name='embed')(x)#
+            h1= C.layers.Embedding(300,init=embedding_title,name='embed')(x)#
         else:
             h1= C.layers.Embedding(300,name='embed')(x)#init=embedding,
         
         #bn = C.layers.BatchNormalization(name='bn')(h1)
-        to_static= C.layers.PastValueWindow(window_size=max_length, axis=-2)(h1)[0]
+        to_static= C.layers.PastValueWindow(window_size=max_length_title, axis=-2)(h1)[0]
 
         #value,valid = to_static(h1)
 
@@ -165,8 +166,8 @@ def create_model_cnn_body():
         h1b= C.layers.Embedding(300,name='embed')(xt)#init=embedding,
         bnb = C.layers.BatchNormalization(name='bn')(h1b)
         bnt = C.layers.BatchNormalization(name='bn')(h1t)
-        to_static_t= C.layers.PastValueWindow(window_size=max_length, axis=-2)(bnt)[0]
-        to_static_b= C.layers.PastValueWindow(window_size=max_length*4, axis=-2)(bnb)[0]
+        to_static_t= C.layers.PastValueWindow(window_size=max_length_title, axis=-2)(bnt)[0]
+        to_static_b= C.layers.PastValueWindow(window_size=max_length_body, axis=-2)(bnb)[0]
 
 
         h2_1t=C.layers.Convolution((1,emb_dim),num_filters=100,reduction_rank=0,activation=C.relu)(to_static_t)
@@ -278,13 +279,8 @@ def evaluate(reader,model_func,is_body=False):#cal precision and recall
     print("Precision:{} Recall:{} Acc:{}".format(aver_precision,aver_recall,accuarcy))
     return accuarcy
 
-def do_test(input_file,is_body=False):
-    reader = create_reader(input_file,is_training=False)
-    acc = my_evaluate(reader, z,is_body)    
- 
-    return acc
 
-def train(reader, model_func,epoch_size, max_epochs=30,is_body=False,data_tag = "180"):
+def train(train_reader, test_reader, model_func,epoch_size, max_epochs=30,is_body=False,data_tag = "180"):
     global model
     criterion = create_criterion_function(create_model())
     
@@ -295,10 +291,10 @@ def train(reader, model_func,epoch_size, max_epochs=30,is_body=False,data_tag = 
 
     if is_body:
         model = model_func(xb,xt)
-        data_map={xb: reader.streams.body,xt: reader.streams.title, y: reader.streams.industry}
+        data_map={xb: train_reader.streams.body,xt: train_reader.streams.title, y: train_reader.streams.industry}
     else:
         model = model_func(x)
-        data_map={x: reader.streams.title, y: reader.streams.industry}
+        data_map={x: train_reader.streams.title, y: train_reader.streams.industry}
     
     loss, label_error = create_criterion_function_preferred(model, y)
 
@@ -341,31 +337,51 @@ def train(reader, model_func,epoch_size, max_epochs=30,is_body=False,data_tag = 
     for epoch in range(max_epochs):         # loop over epochs
         epoch_end = (epoch+1) * epoch_size
         while t < epoch_end:                # loop over minibatches on the epoch
-            data = reader.next_minibatch(minibatch_size, input_map= data_map)  # fetch minibatch
+            data = train_reader.next_minibatch(minibatch_size, input_map= data_map)  # fetch minibatch
             trainer.train_minibatch(data)               # update model with it
             t += data[y].num_samples                    # samples so far
         trainer.summarize_training_progress()
         if epoch%2==0:
-            acc=do_test(is_body)
-            z.save("news/Models/{}_Model_{}_epoch{}_acc{}.dnn".format(m.upper(),data_tag,epoch/2,acc))
+            acc = evaluate(test_reader,z,is_body)
+            z.save("news/Models/{}_Model_{}_epoch{}_acc{0:.2f}.dnn".format(m.upper(),data_tag,int(epoch/2),acc))
             
-def do_train(m,train_file,tag,epoch_size):
+def do_train(m,train_file,test_file,tag,epoch_size):
     global z
     global model
     model = m
     is_body = m.find('body')>=0
     print(m)
     z = create_model()
+    
     #z= load_model("news/Models/LSTM_Model_180_Autosave_epoch3.0_acc0.7861713891009139.dnn")
     #do_test()
+    
     print(z.parameters)                                                                               
-    reader = create_reader(train_file, is_training=True,is_body=is_body)
-    train(reader,z,epoch_size,is_body=is_body,data_tag=tag)
+    train_reader = create_reader(train_file, is_training=True,is_body=is_body)
+    test_reader = create_reader(test_file, is_training=False,is_body=is_body)
+    train(train_reader,test_reader,z,epoch_size,is_body=is_body,data_tag=tag)
     z.save("news/Models/{}Model_{}_final.dnn".format(m.upper()))
 def init_param_setting(vocabulary= 100000,industry = 19,title=0,body = 0):
     global vocab_size,title_size,body_size,num_labels
-    vocab_size,num_labels,title_size,body_size = vocabulary,indsutry,title,body
+    global xb,xt,x,y
+    vocab_size,num_labels,title_size,body_size = vocabulary,industry,title,body
+    # Create the containers for input feature (x) and the label (y)
+    i1_axis = C.Axis.new_unique_dynamic_axis('1')
+    i2_axis = C.Axis.new_unique_dynamic_axis('2')
+    xb = C.sequence.input(shape=body_size, is_sparse=True, sequence_axis=i1_axis, name='xb')
+    xt = C.sequence.input(shape=title_size, is_sparse=True, sequence_axis=i2_axis, name='xt')
+    x = C.sequence.input_variable(vocab_size)
+    y = C.input_variable(num_labels)
+    
 def super_param_setting(embed=300,hidden=200,sentence=50):
     global emb_dim,hidden_dim,max_length
     emb_dim,hidden_dim,max_length = embed,hidden,sentence
-    
+def file_param_setting(industry_file,embed_title_file =None,embed_body_file=None):
+    global industry,embedding_title,embedding_body
+    industry=[i.rstrip("\n") for i in open(industry_file,encoding = "utf-8").readlines()]
+    if embed_title_file:
+        with open(embed_title_file,'rb') as handle:
+            embedding_title=pickle.load(handle)
+    if embed_body_file:
+        with open(embed_body_file,'rb') as handle:
+            embedding_body=pickle.load(handle)

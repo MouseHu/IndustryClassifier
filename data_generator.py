@@ -6,6 +6,7 @@ import copy
 import os
 import random
 import gensim
+import pickle
 from data_processor import *
 np.random.seed(1)
 
@@ -123,6 +124,7 @@ def dict_data(input_file,no_token_list =[]):
             else:
                 _make_dict(row[col],dict_list[col],tokenized=True)
     return dict_list
+
 def dict2file(dict_list,dict_file_list,criteria,with_count=False):
     for i in range(len(dict_file_list)):
         sorted_dict = sorted(dict_list[i].items(), key=operator.itemgetter(1))
@@ -147,7 +149,7 @@ def sample_data(input_file,output_file,num_samples_per_class,per_class=1,classif
         if class_count[classifier(line)]<num_samples_per_class:
             class_count[classifier(line)]+=1
             output.write(line)
-        
+    print("Sample Data Succeed. Total: {}".format(num_samples_per_class*per_class))   
         
 def split_data(input_file,train_file,test_file,split_count=0,industry_dict=None):
     '''
@@ -193,17 +195,19 @@ def ctf_data(input_name,output_name,dict_name_list):
     IMPORTANT: 
         it should be customized on your computer/server if you want to run properly
     '''
+    py_root = "C:\Local\Anaconda3-4.1.1-Windows-x86_64\envs\cntk-py35\python.exe"
+    py_file = "C:/Local/CNTK-2.5.1/cntk/Scripts/txt2ctf.py"
     if len(dict_name_list) == 0:
         print("Empty dict list.")
         return
-    command = "C:\Local\Anaconda3-4.1.1-Windows-x86_64\envs\cntk-py35\python.exe C:/Local/CNTK-2.5.1/cntk/Scripts/txt2ctf.py \
-    --map {} --annotated True --input {} --output {} --unk UNK".format(" ".join(dict_name_list),input_name,output_name)
+    command = " {} {} --map {} --annotated True --input {} --output {} --unk UNK".format(py_root,py_file," ".join(dict_name_list),input_name,output_name)
     #print(command)
     value = os.system(command)
     if value == 0:
         print("Finished Generating CTF Data.")
     else:
         print("Error in Executing Command.")
+        print(command)
         
 def union_data(input_files,output_file,shuffle=True):
     output = open(output_file,"w",encoding = "utf-8")
@@ -214,7 +218,7 @@ def union_data(input_files,output_file,shuffle=True):
     if shuffle:
         shuffle_data(output_file)
         
-def dedup_data(input_file,output_file = None,selector = (lambda row:(row))):
+def dedup_data(input_file,output_file = None,selector = lambda row:row):
     data = open(input_file,encoding = "utf-8").readlines()
     row_dict = {}
     
@@ -230,13 +234,14 @@ def dedup_data(input_file,output_file = None,selector = (lambda row:(row))):
     output.close()
     print("Dedup Successfully. Before:{} After:{}".format(len(data),len(row_dict)))
     
-def embed_dict(embed_file,vocab_dict):
+def embed_dict(w2v_dict,embed_file,vocab_dict):
 
-    model = gensim.models.KeyedVectors.load_word2vec_format('./news/embedding/GoogleNews-vectors-negative300.bin', binary=True)
-    sorted_dict = sorted(dict_list[i].items(), key=operator.itemgetter(1))
-    
+    model = gensim.models.KeyedVectors.load_word2vec_format(w2v_dict, binary=True)
+    sorted_dict = sorted(vocab_dict.items(), key=operator.itemgetter(1))
+    w2v_emb = []
+    count = 0
     for pair in sorted_dict:
-                word = word[0]
+                word = pair[0]
                 if word == "UNK":
                     #print("o")
                     w2v_emb.append(np.random.normal(0,1/300,300))
@@ -244,11 +249,12 @@ def embed_dict(embed_file,vocab_dict):
                 else:
                     try:
                         w2v_emb.append(model[word])
+                        count+=1
                     except:
-                        print(word)
+                        #print(word)
                         w2v_emb.append(np.random.normal(0,1/300,300))
                 #else:
                 #    w2v_dict.append(np.zeros((300)))
     with open(embed_file, 'wb') as handle:
-                    pickle.dump(w2v_emb, handle)
-    print("ok")
+                    pickle.dump(np.array(w2v_emb), handle)
+    print("Embedding File Generate Successfully. Total: {} Embedded: {}".format(len(w2v_emb),count))

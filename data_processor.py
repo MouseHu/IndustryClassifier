@@ -1,8 +1,8 @@
 import re
 import numpy as np
-from cucco import Cucco
+#from cucco import Cucco
 import nltk
-cucco = Cucco()
+#cucco = Cucco()
 
 stop_word=["a", "about", "above", "above", "across", "after", "afterwards", "again", "against", "all", 
            "almost", "alone", "along", "already", "also","although","always","am","among", "amongst", 

@@ -56,13 +56,14 @@ def evaluate(predict,label,num_labels=19,save_file=""):
     print("\n".join([category[i]+"\t\t"+str(2/(1/precision[i]+1/recall[i])) for i in range(num_labels)]))
     print(aver_precision,aver_recall,accuarcy)
     
-def pr_plot(predict,label,predict_prob,num_labels=19):
-    threshold = np.linspace(0,0.9,10)
+def pr_plot(predict,label,predict_prob,num_labels=19,min_th=0,max_th = 0.999):
+    threshold = np.linspace(min_th,max_th,30)
     precision = []
     recall = []
     for th in threshold:
         my_predict = np.copy(predict)
         my_predict[predict_prob<th]=num_labels
+        my_predict = np.array(my_predict,dtype=np.int)
         confuse = fast_hist(my_predict,label,num_labels+1)
         precision_th=np.diag(confuse)/np.sum(confuse,axis=1)
         recall_th = np.diag(confuse)/np.sum(confuse,axis=0)
@@ -121,6 +122,7 @@ def val_predict(text_clf,val_file,result_file):
     
     
 def train(text_clf,title,label,label_num=num_labels):
+    print("Model Training ...")
     
     text_clf = text_clf.fit(title,label)
     print("Model Training Finished.")

@@ -2,8 +2,11 @@ import re
 import numpy as np
 from cucco import Cucco
 import nltk
+from nltk.stem import PorterStemmer
+nltk.download('wordnet')
 cucco = Cucco()
-
+wnl = nltk.WordNetLemmatizer()
+stem = PorterStemmer()
 stop_word=["a", "about", "above", "above", "across", "after", "afterwards", "again", "against", "all", 
            "almost", "alone", "along", "already", "also","although","always","am","among", "amongst", 
            "amoungst", "amount",  "an", "and", "another", "any","anyhow","anyone","anything","anyway", 
@@ -63,6 +66,7 @@ def split(title):
     title=title.replace(u"\u2029","").replace(u'\xa0', u' ')
     title=title.replace("’","'")
     title=title.replace("‘","'")
+
     title=title.replace("'m'"," am")
     title=title.replace("'s"," is")
     title=title.replace("'re"," are")
@@ -95,36 +99,26 @@ def compose(word_list):
     return (" ".join(word_list)).replace(u'\xa0', u' ').strip(" ")
 
 
-#def process_new(title):
-#    title = cucco.normalize(title)
-#    title = re.sub(r"\s‘", " ‘ ", title)
-#    title = re.sub(r"’\s", " ’ ", title)
-#    title = re.sub(r"\s“", " “ ", title)
-#    title = re.sub(r"”\s", " ” ", title)
-    #title = re.sub(r"\A‘", " ‘ ", title)
-    #title = re.sub(r"’\Z", " ’ ", title)
-    #title = re.sub(r"\A“", " “ ", title)
-    #title = re.sub(r"”\Z", " ” ", title)
+def process_new_cucco(title):
+    title = cucco.normalize(title)
+
     
-    #title = re.sub(r"\s\s", " ", title)
-    #title = re.sub(r"([^\s])’s", r"\1 ’s", title)
-    #title = re.sub(r"([^\s])’re", r"\1 ’re", title)
-    #title = re.sub(r"([^\s])’ll", r"\1 ’ll", title)
-    #title = re.sub(r"n’t", " not", title)
+    title = re.sub(r"[0-9,]+[A-Z,a-z]\s", "UNINUMBER ", title)
+    title = re.sub(r"[0-9,]+", " UNINUMBER ", title)#
+    title = re.sub(r"\s\s", " ", title)
     
-#    title = re.sub(r"[0-9]+[A-Z,a-z]\s", "NUMBER ", title)
-#    title = re.sub(r"[0-9]+", " NUMBER ", title)#
-#    title = re.sub(r"\s\s", " ", title)
+    title = re.sub(r"([^A-Z,a-z,\",'])", r" \1 ", title)
     
-#    title = re.sub(r"([^A-Z,a-z,\",'])", r" \1 ", title)
-    
-#    title = re.sub(r"\s\s", " ", title)
-#    title = re.sub(r"\s\s", " ", title)
-#    title = re.sub(r"\A\s", "", title)
-#    title = re.sub(r"\s\Z", "", title)
-#    return title
+    title = re.sub(r"\s\s", " ", title)
+    title = re.sub(r"\s\s", " ", title)
+    title = re.sub(r"\A\s", "", title)
+    title = re.sub(r"\s\Z", "", title)
+    title = [stem.stem(t) for t in title.split(" ")]
+    return " ".join(title)
+
 def process_new(sentence):
-    return " ".join(nltk.word_tokenize(sentence))
+    lemma = [wnl.lemmatize(t) for t in nltk.word_tokenize(sentence)]
+    return " ".join(lemma)
 def process_property():
     return {'low':pre_low,'old':pre_old,'stop':pre_stop}
 def process_setting(low =True,old = True,stop = True):
@@ -139,4 +133,4 @@ def tokenize(title):
         else:
             return compose(split(title))
     else:
-        return process_new(title)
+        return process_new_cucco(title)

@@ -8,6 +8,7 @@ import random
 import gensim
 import pickle
 from data_processor import *
+from collections import OrderedDict
 np.random.seed(1)
 
 
@@ -131,9 +132,9 @@ def dict2file(dict_list,dict_file_list,criteria,with_count=False):
         file = open(dict_file_list[i],"w",encoding="utf-8")
         for x in sorted_dict:
             
-            if with_count and criteria[i](x[1]):
+            if with_count and criteria[i](x):
                 file.write(x[0]+"\t"+str(x[1])+"\n")
-            elif criteria[i](x[1]):
+            elif criteria[i](x):
                 file.write(x[0]+"\n")
         if len(sorted_dict)>200 and not with_count:
             file.write("UNK\n")
@@ -213,14 +214,14 @@ def union_data(input_files,output_file,shuffle=True):
     output = open(output_file,"w",encoding = "utf-8")
     for file in input_files:
         for line in open(file,encoding = "utf-8").readlines():
-            output.write_line()
+            output.write(line)
     output.close()
     if shuffle:
         shuffle_data(output_file)
-        
+    print("Union Data Succeed.")
 def dedup_data(input_file,output_file = None,selector = lambda row:row):
     data = open(input_file,encoding = "utf-8").readlines()
-    row_dict = {}
+    row_dict = OrderedDict()
     
     for line in data:
         row_dict[selector(line)] = line
@@ -234,27 +235,37 @@ def dedup_data(input_file,output_file = None,selector = lambda row:row):
     output.close()
     print("Dedup Successfully. Before:{} After:{}".format(len(data),len(row_dict)))
     
-def embed_dict(w2v_dict,embed_file,vocab_dict):
+def embed_dict(w2v_dict,embed_file,vocab_dict,criteria=lambda x:True):
 
     model = gensim.models.KeyedVectors.load_word2vec_format(w2v_dict, binary=True)
     sorted_dict = sorted(vocab_dict.items(), key=operator.itemgetter(1))
     w2v_emb = []
     count = 0
     for pair in sorted_dict:
-                word = pair[0]
-                if word == "UNK":
-                    #print("o")
+            word = pair[0]
+            if not criteria(pair):
+                continue
+            else:
+                try:
+                    w2v_emb.append(model[word])
+                    count+=1
+                except:
+                    #print(word)
                     w2v_emb.append(np.random.normal(0,1/300,300))
 
-                else:
-                    try:
-                        w2v_emb.append(model[word])
-                        count+=1
-                    except:
-                        #print(word)
-                        w2v_emb.append(np.random.normal(0,1/300,300))
-                #else:
-                #    w2v_dict.append(np.zeros((300)))
+
+    w2v_emb.append(np.random.normal(0,1/300,300))
     with open(embed_file, 'wb') as handle:
                     pickle.dump(np.array(w2v_emb), handle)
     print("Embedding File Generate Successfully. Total: {} Embedded: {}".format(len(w2v_emb),count))
+def concatenate_data(input_files,output_file):
+    data_sample = [len(open(file,encoding="utf_8").readline().split("\t")) for file in input_files]
+    print("Total input:{} Total cols:{}".format(len(input_file),np.sum(data_sample)))
+    data = zip(*[open(file,encoding="utf_8").readlines() for file in input_files])
+    output = open(output_file,"w",encoding="utf-8")
+    for lines in data:
+        output_line = []
+        for line in lines:
+            output_line = output_line+line.strip("\n").split("\t")
+        output.write("\t".join(output_line)+"\n")
+    output.close()

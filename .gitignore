@@ -2,3 +2,6 @@ Data/*
 .ipynb_checkpoints/*
 *__pycache__/
 *.pkl
+news/*
+model/*
+*.model*

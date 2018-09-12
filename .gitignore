@@ -5,3 +5,4 @@ Data/*
 news/*
 model/*
 *.model*
+*.bin

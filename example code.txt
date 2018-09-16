@@ -1,0 +1,16 @@
+python train.py --suffix 180days_all_shuffled --lr 5e-4 --model cnn_dynamic --tag cnn_dynamic_output
+
+python train.py --suffix 180days_all_shuffled --lr 5e-4 --model cnn_dynamic 
+
+python test.py --test_file Data/middle/test_180days_all_shuffled.txt --model model/180days_all_shuffled/lstm_acc0.858.dnn --suffix 180days_all_shuffled
+
+python test.py --test_file Data/middle/test_180days_all_body_shuffled.txt --model model/180days_all_body_shuffled/rcnn_2fold_body_acc0.870.dnn --suffix 180days_all_body_shuffled
+
+python inference.py --suffix 180days_all_shuffled --model model/180days_all_shuffled/lstm_acc0.858.dnn  --input Data/middle/1day_measure_sample_valid.txt --output val/dyn_cnn_1day_measure_180days_all_shuffled.txt --batch_size 10
+
+python inference.py --suffix 180days_all_body_shuffled --model model/180days_all_body_shuffled/cnn_body_acc0.867.dnn  --input Data/middle/1day_measure_sample_valid_body.txt --output val/body_cnn_1day_measure_180days_all_body_shuffled.txt --batch_size 10
+
+python inference.py --suffix 180days_all_shuffled --model model/180days_all_shuffled/cnn_acc0.858.dnn  --input Data/middle/1day_measure_sample_valid.txt --output val/dyn_cnn_1day_measure_180days_all_shuffled.txt --batch_size 10
+
+python inference.py --suffix 180days_all_shuffled --model model/180days_all_shuffled/dynamic_cnn_acc0.854.dnn  --input Data/middle/1day_measure_sample_valid.txt --output val/dyn_cnn_1day_measure_180days_all_shuffled.txt --batch_size 10
+

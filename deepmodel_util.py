@@ -99,7 +99,7 @@ def load_data_static(input_file,title_dict,industry_dict,raw=False):
             data_title[index,jndex]=title_dict.get(token,len(title_dict)-1)
         data_label[index] = industry_dict.get(industry,len(industry_dict))
     
-    return data_title,data_label
+    return data_title.tolist(),data_label.tolist()
 
 def load_embedding(dict_file,embedding_model_file):
     model = Word2Vec.load(embedding_model_file)
@@ -137,6 +137,7 @@ def fast_hist(a, b, n):
     return np.bincount(n * a[k].astype(int) + b[k], minlength=n**2).reshape(n, n)
 
 def test(batch_size,model,data):
+    print("Testing...")
     scores = model(input_xt)
     predict = C.argmax(scores,axis = 0)
     confuse = np.zeros((num_labels,num_labels))
@@ -146,7 +147,10 @@ def test(batch_size,model,data):
     
     for batch in batches:
         batch_data_title,batch_data_label = zip(*batch) 
-        output = np.array(predict.eval({input_xt: np.array(batch_data_title)}),dtype=np.int)
+        
+        batch_data_title = list(batch_data_title)
+        #print(type(batch_data_title))
+        output = np.array(predict.eval({input_xt: batch_data_title}),dtype=np.int)
         gt = np.array(batch_data_label,dtype=np.int)
         confuse+=fast_hist(output,gt,num_labels)
         
@@ -160,6 +164,7 @@ def test(batch_size,model,data):
     return accuracy
 
 def test_body(batch_size,model,data):
+    print("Testing...")
     scores = model(input_xt,input_xb)
     predict = C.argmax(scores,axis = 0)
     confuse = np.zeros((num_labels,num_labels))
@@ -168,8 +173,11 @@ def test_body(batch_size,model,data):
     batches = batch_iter(list(zip(test_data_title,test_data_body,test_data_label)), batch_size, 1)
     
     for batch in batches:
-        batch_data_title,batch_data_body,batch_data_label = zip(*batch) 
-        output = np.array(predict.eval({input_xb: np.array(batch_data_body),input_xt: np.array(batch_data_title)}),dtype=np.int)
+        batch_data_title,batch_data_body,batch_data_label = zip(*batch)
+        
+        batch_data_body = list(batch_data_body)
+        batch_data_title = list(batch_data_title)
+        output = np.array(predict.eval({input_xb: batch_data_body,input_xt: batch_data_title}),dtype=np.int)
         gt = np.array(batch_data_label,dtype=np.int)
         confuse+=fast_hist(output,gt,num_labels)
     precision=np.diag(confuse)/np.sum(confuse,axis=0)
@@ -183,7 +191,7 @@ def test_body(batch_size,model,data):
 
 def train(model,train_data,num_epochs,learning_rate,batch_size,tag="CNN",l2_weight=0,show_count =1000,do_test=True):
     
-    print(C.logging.get_node_outputs(model))
+    #print(C.logging.get_node_outputs(model))
     scores = model(input_xt)
 
     loss =C.reduce_mean(C.losses.cross_entropy_with_softmax(scores, input_y_one_hot))
@@ -210,21 +218,24 @@ def train(model,train_data,num_epochs,learning_rate,batch_size,tag="CNN",l2_weig
     for batch in batches:
         count += 1
         batch_data_title,batch_data_label = zip(*batch)
-        batch_data_title = [x.tolist() for x in list(batch_data_title)]
+        batch_data_title = list(batch_data_title)
+        batch_data_label = list(batch_data_label)
         #print(type(batch_data_title),type(batch_data_title[0]),batch_data_title[0])
-        trainer.train_minibatch({input_xt: np.array(batch_data_title), input_y: np.array(batch_data_label)})
+        trainer.train_minibatch({input_xt: batch_data_title, input_y: batch_data_label})
         if count%show_count== 0:
-            print(count,time.time()-t)
+            print("batch count:{} elapse time:{}".format(count,time.time()-t))
             t=time.time()
             if do_test:
                 acc1=test(batch_size,model,test_data)
-            model.save('./model/{}_acc{:.3f}.dnn'.format(tag,acc1))
+                model.save('./model/{}_acc{:.3f}.dnn'.format(tag,acc1))
+            else:
+                model.save('./model/{}.dnn'.format(tag))
             
 def train_body(model,train_data,num_epochs,learning_rate,batch_size,l2_weight=0,tag = "cnn",show_count =1000,do_test=True):
     
     #learning_rate *= batch_size
     #model = model_func()
-    print(C.logging.get_node_outputs(model))
+    #print(C.logging.get_node_outputs(model))
     scores = model(input_xt,input_xb)
 
     loss =C.reduce_mean(C.losses.cross_entropy_with_softmax(scores, input_y_one_hot))
@@ -251,15 +262,19 @@ def train_body(model,train_data,num_epochs,learning_rate,batch_size,l2_weight=0,
     for batch in batches:
         count += 1
         batch_data_title,batch_data_body,batch_data_label = zip(*batch)
-        #print(np.array(batch_data_body).shape)
-        #batch_data_title,batch_data_body,batch_data_label = transfer(batch_data_title),transfer(batch_data_body),trainsfer(batch_data_label)
-        trainer.train_minibatch({input_xb: np.array(batch_data_body),input_xt: np.array(batch_data_title), input_y: np.array(batch_data_label)})
-        if count%1000== 0:
-            print(count,time.time()-t)
+        batch_data_body = list(batch_data_body)
+        batch_data_title = list(batch_data_title)
+        batch_data_label = list(batch_data_label)
+        
+        trainer.train_minibatch({input_xb: batch_data_body,input_xt: batch_data_title, input_y: batch_data_label})
+        if count%show_count== 0:
+            print("batch count:{} elapse time:{}".format(count,time.time()-t))
             t=time.time()
             if do_test:
                 acc1=test_body(batch_size,model,test_data)
-            model.save('./model/{}_acc{:.3f}.dnn'.format(tag,acc1))
+                model.save('./model/{}_acc{:.3f}.dnn'.format(tag,acc1))
+            else:
+                model.save('./model/{}.dnn'.format(tag))
             
 def inference(model,val_doc_file,output_file,title_dict,industry_file,dynamic=False):
     
@@ -283,13 +298,13 @@ def inference(model,val_doc_file,output_file,title_dict,industry_file,dynamic=Fa
             while len(data_title[index])<5:
                 data_title[index].append(len(title_dict)-1) 
     else:
-        data_title =np.zeros((len(data),max_length_title),dtype = np.float32)
-        for index,line in enumerate(data):
-            title    =  row[0]     
-        for jndex,token in enumerate(title.split(" ")):
-            if jndex>=max_length_title:
-                break
-            data_title[index,jndex]=title_dict.get(token,len(title_dict)-1)
+        data_title =np.zeros((len(val_doc),max_length_title),dtype = np.float32)
+        for index,title in enumerate(val_doc):
+            #title    =  row[0]     
+            for jndex,token in enumerate(title.split(" ")):
+                if jndex>=max_length_title:
+                    break
+                data_title[index,jndex]=title_dict.get(token,len(title_dict)-1)
     batches = batch_iter(data_title, batch_size, 1,shuffle =False)
     for batch in batches:
         batch_data_title = batch
@@ -317,6 +332,7 @@ def inference_body(model,val_doc_file,output_file,title_dict,body_dict,industry_
     
     data_title = np.zeros((len(val_title),max_length_title),dtype = np.float32)
     data_body= np.zeros((len(val_body),max_length_body),dtype = np.float32)
+    
     for index,title in enumerate(val_title):       
         for jndex,token in enumerate(title.split(" ")):
             if jndex>=max_length_title:
@@ -340,3 +356,4 @@ def inference_body(model,val_doc_file,output_file,title_dict,body_dict,industry_
             output.write("\t".join([str(industry[int(pre)]),str(pro[0])])+"\n")
     output.close()
     print("predict finished.")
+    

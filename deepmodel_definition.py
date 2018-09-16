@@ -136,11 +136,7 @@ def create_model_cnn_2fold(dynamic = False):
         h1_2_expand = C.expand_dims(h1_2,-3)
         
         h1 = C.splice(h1_1_expand,h1_2_expand,axis = -3)
-        
-        #bn = C.layers.BatchNormalization(name='bn')(h1)
-        
 
-        #value,valid = to_static(h1)
 
         filter_num=100
 
@@ -197,3 +193,42 @@ def create_model_cnn_with_body():
     h4=C.layers.Dense(num_labels,name='classify')(h3)
 
     return h4
+
+def BiRecurrence(fwd, bwd):
+    F = C.layers.Recurrence(fwd)
+    G = C.layers.Recurrence(bwd, go_backwards=True)
+    x = C.placeholder()
+    apply_x = C.splice(sequence.last(F(x)), sequence.first(G(x)),name='h2')
+    return apply_x
+
+def create_model_lstm(embed = False):
+    #version 2 : 1 dense layer version3: sigmoid activation in dens
+    with C.layers.default_options(initial_state=0.1):
+        if embed:
+            h1= C.layers.Sequential([
+            C.layers.Embedding(emb_size,name='embed_1'),
+            #C.to_sequence(),
+            C.layers.BatchNormalization(),
+            C.layers.Stabilizer()])(input_xt_one_hot)
+        else:
+            h1= C.layers.Sequential([
+            C.layers.Embedding(emb_dim,name='embed_2'),
+            C.layers.BatchNormalization(),
+            C.layers.Stabilizer()])(input_xt_one_hot)       
+        h2=BiRecurrence(C.layers.LSTM(hidden_dim),C.layers.LSTM(hidden_dim))(h1)
+        h4=C.layers.Dense(num_labels, name='classify')(h2)
+    return h4
+
+def create_model(model):
+    return {
+        "cnn":create_model_cnn,
+        "cnn_dynamic":create_model_cnn_dynamic,
+        "lstm": create_model_lstm,
+        "rcnn": create_model_rcnn_normal,
+        "cnn_body":create_model_cnn_with_body,
+        "cnn_2fold":create_model_cnn_2fold,
+        "rcnn_cnn":create_model_rcnn_with_cnn,
+        "rcnn_body":create_model_rcnn_body,
+        "rcnn_body_2fold":create_model_rcnn_body_2fold
+        
+    }[model]
